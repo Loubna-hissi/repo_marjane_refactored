@@ -1,5 +1,6 @@
 package com.nimbleways.springboilerplate.entities;
 
+import com.nimbleways.springboilerplate.enums.ProductType;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ import javax.persistence.*;
 @NoArgsConstructor
 @Table(name = "products")
 public class Product {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
@@ -24,8 +26,9 @@ public class Product {
     @Column(name = "available")
     private Integer available;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "type")
-    private String type;
+    private ProductType type;
 
     @Column(name = "name")
     private String name;
@@ -38,4 +41,20 @@ public class Product {
 
     @Column(name = "season_end_date")
     private LocalDate seasonEndDate;
+
+    public boolean isOutOfStock() {
+        return available == null || available <= 0;
+    }
+
+    public boolean isNormal() {
+        return ProductType.NORMAL.equals(type);
+    }
+
+    public boolean isSeasonal() {
+        return ProductType.SEASONAL.equals(type);
+    }
+
+    public boolean isExpirable() {
+        return ProductType.EXPIRABLE.equals(type);
+    }
 }

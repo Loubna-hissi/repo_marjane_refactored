@@ -1,49 +1,112 @@
 package com.nimbleways.springboilerplate.services.implementations;
 
-import java.time.LocalDate;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 import com.nimbleways.springboilerplate.entities.Product;
 import com.nimbleways.springboilerplate.repositories.ProductRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
 
 @Service
+@RequiredArgsConstructor
 public class ProductService {
 
-    @Autowired
-    ProductRepository pr;
+    private final ProductRepository productRepository;
+    private final NotificationService notificationService;
 
-    @Autowired
-    NotificationService ns;
+    public void processProduct(Product product) {
 
-    public void notifyDelay(int leadTime, Product p) {
-        p.setLeadTime(leadTime);
-        pr.save(p);
-        ns.sendDelayNotification(leadTime, p.getName());
-    }
+        if (product.isNormal()) {
+            processNormal(product);
+            return;
+        }
 
-    public void handleSeasonalProduct(Product p) {
-        if (LocalDate.now().plusDays(p.getLeadTime()).isAfter(p.getSeasonEndDate())) {
-            ns.sendOutOfStockNotification(p.getName());
-            p.setAvailable(0);
-            pr.save(p);
-        } else if (p.getSeasonStartDate().isAfter(LocalDate.now())) {
-            ns.sendOutOfStockNotification(p.getName());
-            pr.save(p);
-        } else {
-            notifyDelay(p.getLeadTime(), p);
+        if (product.isSeasonal()) {
+            processSeasonal(product);
+            return;
+        }
+
+        if (product.isExpirable()) {
+            processExpirable(product);
         }
     }
 
-    public void handleExpiredProduct(Product p) {
-        if (p.getAvailable() > 0 && p.getExpiryDate().isAfter(LocalDate.now())) {
-            p.setAvailable(p.getAvailable() - 1);
-            pr.save(p);
+    private void processNormal(Product product) {
+
+        if (product.getAvailable() > 0) {
+            decreaseStock(product);
         } else {
-            ns.sendExpirationNotification(p.getName(), p.getExpiryDate());
-            p.setAvailable(0);
-            pr.save(p);
+            notifyDelay(product.getLeadTime(), product);
+        }
+    }
+
+    private void processSeasonal(Product product) {
+
+        LocalDate now = LocalDate.now();
+
+        boolean inSeason =
+                now.isAfter(product.getSeasonStartDate()) &&
+                        now.isBefore(product.getSeasonEndDate());
+
+        if (inSeason && product.getAvailable() > 0) {
+            decreaseStock(product);
+        } else {
+            handleSeasonalProduct(product);
+        }
+    }
+
+    private void processExpirable(Product product) {
+
+        if (product.getAvailable() > 0 && product.getExpiryDate().isAfter(LocalDate.now())) {
+            decreaseStock(product);
+        } else {
+            handleExpiredProduct(product);
+        }
+    }
+
+    private void decreaseStock(Product product) {
+        product.setAvailable(product.getAvailable() - 1);
+        productRepository.save(product);
+    }
+
+    public void notifyDelay(int leadTime, Product product) {
+
+        product.setLeadTime(leadTime);
+        productRepository.save(product);
+
+        notificationService.sendDelayNotification(leadTime, product.getName());
+    }
+
+    public void handleSeasonalProduct(Product product) {
+
+        if (LocalDate.now().plusDays(product.getLeadTime()).isAfter(product.getSeasonEndDate())) {
+
+            notificationService.sendOutOfStockNotification(product.getName());
+            product.setAvailable(0);
+            productRepository.save(product);
+
+        } else if (product.getSeasonStartDate().isAfter(LocalDate.now())) {
+
+            notificationService.sendOutOfStockNotification(product.getName());
+            productRepository.save(product);
+
+        } else {
+
+            notifyDelay(product.getLeadTime(), product);
+        }
+    }
+
+    public void handleExpiredProduct(Product product) {
+
+        if (product.getAvailable() > 0 && product.getExpiryDate().isAfter(LocalDate.now())) {
+
+            decreaseStock(product);
+
+        } else {
+
+            notificationService.sendExpirationNotification(product.getName(), product.getExpiryDate());
+            product.setAvailable(0);
+            productRepository.save(product);
         }
     }
 }
